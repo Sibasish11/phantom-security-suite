@@ -1,0 +1,27 @@
+{
+  "name": "phantomlayer-dashboard",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "node tests/browser-smoke.cjs && node tests/ui-polish.cjs && node tests/judge-demo.cjs",
+    "test:smoke": "node tests/browser-smoke.cjs",
+    "test:ui": "node tests/ui-polish.cjs",
+    "test:judge": "node tests/judge-demo.cjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-router-dom": "^7.18.4",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "playwright": "1.63.0"
+  }
+}

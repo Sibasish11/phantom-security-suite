@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.db
+*.sqlite
+.venv/
+coverage.xml
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts

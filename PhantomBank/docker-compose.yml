@@ -1,0 +1,96 @@
+services:
+  bank-postgres-real:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-phantombank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${REAL_POSTGRES_DB:-phantombank_real}
+    volumes:
+      - bank_real_data:/var/lib/postgresql/data
+    networks:
+      - bank_real_data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-phantombank} -d ${REAL_POSTGRES_DB:-phantombank_real}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  bank-postgres-honeypot:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-phantombank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${HONEYPOT_POSTGRES_DB:-phantombank_honeypot}
+    volumes:
+      - bank_honeypot_data:/var/lib/postgresql/data
+    networks:
+      - bank_honeypot_data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-phantombank} -d ${HONEYPOT_POSTGRES_DB:-phantombank_honeypot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  bank-api:
+    build: ./backend
+    environment:
+      REAL_DATABASE_URL: postgresql://${POSTGRES_USER:-phantombank}:${POSTGRES_PASSWORD}@bank-postgres-real:5432/${REAL_POSTGRES_DB:-phantombank_real}
+      HONEYPOT_DATABASE_URL: postgresql://${POSTGRES_USER:-phantombank}:${POSTGRES_PASSWORD}@bank-postgres-honeypot:5432/${HONEYPOT_POSTGRES_DB:-phantombank_honeypot}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?run ./scripts/setup.sh first}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DEMO_MODE: ${DEMO_MODE:-true}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001}
+      PHANTOMLAYER_URL: ${PHANTOMLAYER_URL:-http://backend:8000}
+      AGENT_ID: ${AGENT_ID:?register PhantomLayer agent and set AGENT_ID}
+      AGENT_TOKEN: ${AGENT_TOKEN:?register PhantomLayer agent and set AGENT_TOKEN}
+      DEFENDER_EVIDENCE_TOKEN: ${DEFENDER_EVIDENCE_TOKEN:?run ./scripts/setup.sh first}
+    ports:
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      bank-postgres-real:
+        condition: service_healthy
+      bank-postgres-honeypot:
+        condition: service_healthy
+    networks:
+      bank_ui:
+        aliases: [bank-api]
+      bank_real_data:
+      bank_honeypot_data:
+      phantomlayer_edge:
+        aliases: [bank-api]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  bank-ui:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:3001:80"
+    depends_on:
+      bank-api:
+        condition: service_healthy
+    networks:
+      - bank_ui
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+networks:
+  bank_ui:
+  bank_real_data:
+    internal: true
+  bank_honeypot_data:
+    internal: true
+  # Created by PhantomLayer's deployment or by scripts/setup.sh.
+  # The bank API joins it only to reach the parent decision service.
+  phantomlayer_edge:
+    name: phantomlayer_edge
+    external: true
+
+volumes:
+  bank_real_data:
+  bank_honeypot_data:

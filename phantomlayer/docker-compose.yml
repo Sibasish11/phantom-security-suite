@@ -1,0 +1,127 @@
+services:
+  postgres-real:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-phantomlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${REAL_POSTGRES_DB:-phantomlayer_real}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_real_data:/var/lib/postgresql/data
+    networks:
+      - real_data
+      - real_publish
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phantomlayer -d phantomlayer_real"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  postgres-honeypot:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-phantomlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${HONEYPOT_POSTGRES_DB:-phantomlayer_honeypot}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_honeypot_data:/var/lib/postgresql/data
+    networks:
+      - honeypot_data
+      - honeypot_publish
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phantomlayer -d phantomlayer_honeypot"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  postgres-control:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-phantomlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${CONTROL_POSTGRES_DB:-phantomlayer_control}
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - postgres_control_data:/var/lib/postgresql/data
+    networks:
+      - control_data
+      - control_publish
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phantomlayer -d phantomlayer_control"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: ./backend
+    environment:
+      REAL_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-phantomlayer}:${POSTGRES_PASSWORD}@postgres-real:5432/${REAL_POSTGRES_DB:-phantomlayer_real}
+      HONEYPOT_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-phantomlayer}:${POSTGRES_PASSWORD}@postgres-honeypot:5432/${HONEYPOT_POSTGRES_DB:-phantomlayer_honeypot}
+      CONTROL_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-phantomlayer}:${POSTGRES_PASSWORD}@postgres-control:5432/${CONTROL_POSTGRES_DB:-phantomlayer_control}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?set AUTH_SECRET_KEY in .env}
+      DEBUG: "false"
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      DEMO_MODE: ${DEMO_MODE:-false}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres-real:
+        condition: service_healthy
+      postgres-honeypot:
+        condition: service_healthy
+      postgres-control:
+        condition: service_healthy
+    networks:
+      - edge
+      - real_data
+      - honeypot_data
+      - control_data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+networks:
+  edge:
+
+  # Separate publish networks retain loopback developer access on Docker
+  # versions that do not publish ports from an internal-only network.
+  # Unlike the old db_publish network, no two databases share one.
+  real_publish:
+  honeypot_publish:
+  control_publish:
+
+  real_data:
+    internal: true
+
+  honeypot_data:
+    internal: true
+
+  control_data:
+    internal: true
+
+volumes:
+  postgres_real_data:
+  postgres_honeypot_data:
+  postgres_control_data:

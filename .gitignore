@@ -1,0 +1,74 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Databases / local data
+*.db
+*.sqlite
+*.sqlite3
+data/
+postgres-data/
+pgdata/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Docker overrides
+docker-compose.override.yml
+
+# Certificates / private keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# SSH
+id_rsa
+id_rsa.pub
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+__pycache__/
+*.py[cod]
+# PhantomLayer agent credentials
+**/.agent_credentials.env
+
+# Internal agent artifacts
+__agent__/

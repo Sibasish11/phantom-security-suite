@@ -1,0 +1,1 @@
+"""PhantomBank FastAPI application."""
