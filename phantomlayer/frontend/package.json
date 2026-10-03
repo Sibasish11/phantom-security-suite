@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "node tests/browser-smoke.cjs && node tests/ui-polish.cjs && node tests/judge-demo.cjs",
+    "test": "node tests/customer-journey.cjs",
     "test:smoke": "node tests/browser-smoke.cjs",
     "test:ui": "node tests/ui-polish.cjs",
-    "test:judge": "node tests/judge-demo.cjs"
+    "test:judge": "node tests/judge-demo.cjs",
+    "test:customer": "node tests/customer-journey.cjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

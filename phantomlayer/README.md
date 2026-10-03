@@ -61,7 +61,14 @@ The migration creates security record/decision tables and indexes without droppi
 - PostgreSQL: loopback ports 5432 / 5433 / 5434. Separate internal data networks and separate publish networks preserve database separation.
 - Local PhantomLayer web/API ports bind to loopback; the supplied stack is not a TLS deployment. Healthchecks establish liveness, not exhaustive database/schema readiness.
 
-For the presentation, follow [the Judge Demo Runbook](docs/JUDGE-DEMO.md): exact startup commands, a 3–5 minute live sequence, synthetic credentials, presenter wording, questions, and troubleshooting. [The integration guide](docs/hackathon-demo.md) retains additional provisioning context without printing generated credentials.
+For the presentation, follow [the Judge Demo Runbook](docs/JUDGE-DEMO.md): startup commands, the complete signup-to-investigation sequence, synthetic credentials, before/after proof and recovery. [The integration guide](docs/hackathon-demo.md) explains optional automated judge provisioning without printing generated credentials.
+
+Start the actual product journey with [Customer onboarding](docs/CUSTOMER-ONBOARDING.md).
+PhantomBank now starts independently, publishes your local ownership challenge,
+and installs a customer-specific configuration downloaded from the authenticated
+UI. `provision_demo.py` is optional. ACTIVE is derived from verified ownership,
+enabled matching protection, a fresh healthy agent, both local databases and the
+installed routing adapter; clients cannot set it manually.
 
 ## Checks — do not point historical fixtures at live data
 
@@ -69,16 +76,15 @@ For the presentation, follow [the Judge Demo Runbook](docs/JUDGE-DEMO.md): exact
 # From phantomlayer/: creates fresh, separately named QA databases.
 ./scripts/test-backend.sh -q
 
-# Frontend build and real browser QA (requires both running stacks and an incident).
+# Frontend build and complete customer browser QA (requires both running stacks).
 cd frontend
 npm ci
 npm run build
-# Set PHANTOMLAYER_EMAIL and PHANTOMLAYER_PASSWORD in your shell.
 # Install a browser with npx playwright install chromium, or set CHROMIUM_PATH.
-npm test
+npm run test:customer
 ```
 
-The QA runner creates `phantomlayer_qa_*` databases, seeds test identities, and refuses non-QA database targets. It never drops live databases or volumes. QA databases are retained for inspection and need eventual operator-approved cleanup. **Do not run the full legacy backend suite directly against demo databases:** some historical fixtures clear sessions.
+The QA runner creates `phantomlayer_qa_*` databases, seeds test identities, refuses non-QA targets, and removes only the databases it just created on exit. It never drops live databases or volumes. **Do not run the full legacy backend suite directly against demo databases:** some historical fixtures clear sessions. The customer browser test (`npm test` or `npm run test:customer`) tracks and cleans its disposable tenants/events/incidents and bank audits, restores the original connection, and verifies both original dataset/audit fingerprints. Existing canonical and historical tenants are retained. Older `test:smoke`, `test:ui` and `test:judge` scripts retain activity and are not the final customer lifecycle test.
 
 Bank tests, PostgreSQL concurrency checks, live isolation and restart scripts are documented in [PhantomBank's README](../PhantomBank/README.md). Fresh presentation checks are in [final demo verification](docs/final-demo-verification.md); earlier findings and boundaries remain in [the QA report](docs/qa-report.md). Run Docker-backed suites before (not during) browser QA to avoid Chromium network-change errors as disposable containers are created/removed.
 

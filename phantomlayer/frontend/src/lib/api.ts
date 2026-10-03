@@ -189,6 +189,7 @@ export function login(
 ========================================================= */
 
 export interface Domain {
+  local_verification_available?: boolean;
   id: string;
   domain: string;
   verification_record_name: string;
@@ -246,10 +247,13 @@ export type ProtectionLayer =
 
 export type ProtectionStatus =
   | "configuring"
+  | "connecting"
+  | "degraded"
   | "active"
   | "paused";
 
 export interface Protection {
+  readiness_blockers?: string[];
   id: string;
   organization_id: string;
   domain_id: string;
@@ -289,7 +293,6 @@ export function updateProtection(
   payload: {
     layer?: ProtectionLayer;
     enabled?: boolean;
-    status?: ProtectionStatus;
     configuration?: Record<string, unknown>;
   },
 ): Promise<Protection> {
@@ -305,6 +308,7 @@ export function updateProtection(
 
 export type AgentStatus =
   | "pending"
+  | "connecting"
   | "healthy"
   | "degraded"
   | "offline";

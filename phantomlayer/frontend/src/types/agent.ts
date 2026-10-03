@@ -1,5 +1,6 @@
 export type AgentStatus =
   | "pending"
+  | "connecting"
   | "healthy"
   | "degraded"
   | "offline";

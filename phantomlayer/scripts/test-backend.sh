@@ -5,13 +5,21 @@ cd "$(dirname "$0")/.."
 # Tests use throwaway DATABASES, never the running demo databases. No live
 # volumes or schemas are deleted. Test DB names are deliberately explicit.
 QA_SUFFIX="$(date +%s)_$$"
+created=()
+cleanup() {
+  for pair in "${created[@]}"; do
+    read -r service database <<< "$pair"
+    docker compose exec -T "$service" sh -eu -c 'dropdb --if-exists -U "$POSTGRES_USER" "$1"' sh "$database"
+  done
+}
+trap cleanup EXIT
+echo "Disposable PhantomLayer QA database suffix: $QA_SUFFIX (removed on exit)"
 for pair in "postgres-real phantomlayer_qa_real_${QA_SUFFIX}" "postgres-honeypot phantomlayer_qa_honeypot_${QA_SUFFIX}" "postgres-control phantomlayer_qa_control_${QA_SUFFIX}"; do
   read -r service database <<< "$pair"
   docker compose exec -T "$service" sh -eu -c '
-    if ! psql -U "$POSTGRES_USER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '\''$1'\''" | grep -q 1; then
-      createdb -U "$POSTGRES_USER" "$1"
-    fi
+    createdb -U "$POSTGRES_USER" "$1"
   ' sh "$database"
+  created+=("$pair")
 done
 
 # Bind the current source tree into a short-lived test runner, leaving the

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { StatusPill } from "../../components/StatusPill";
 import { useOrganization } from "../../hooks/useOrganization";
-import { demoVerifyDomain, verifyDomain } from "../../lib/api";
+import { apiPost, demoVerifyDomain, verifyDomain } from "../../lib/api";
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { CopyCommand } from '../../components/CopyCommand';
 
@@ -21,7 +21,7 @@ export function VerifyDomain() {
   const [verifyError, setVerifyError] = useState("");
 
   const domain =
-    verifiedDomain ?? domains[domains.length - 1];
+    domains[0] ?? verifiedDomain;
 
   async function handleVerification(demo = false) {
     if (!domain) {
@@ -258,7 +258,18 @@ export function VerifyDomain() {
             </button>
           </div>
 
-          <button type="button" className="demo-verification-button" disabled={verifying || isLoading} onClick={() => void handleVerification(true)}>Use local demo verification →</button>
+          {domain.local_verification_available && <div className="onboarding-security-note"><div>
+            <strong>Local PhantomBank ownership challenge</strong>
+            <p>From your PhantomBank directory, run the command below and paste this TXT value when prompted. This proves control of the local bank deployment; it is not public DNS ownership.</p>
+            <CopyCommand command="python scripts/connect.py verify" label="Copy verification command" />
+            <button type="button" className="demo-verification-button" disabled={verifying || isLoading} onClick={() => void handleVerification(true)}>Use local demo verification →</button>
+          </div></div>}
+          <button type="button" className="demo-verification-button" disabled={verifying} onClick={async () => {
+            setVerifying(true); setVerifyError('');
+            try { await apiPost(`/domains/${domain.id}/renew-challenge`); await refresh(); }
+            catch (err) { setVerifyError(err instanceof Error ? err.message : 'Unable to renew challenge'); }
+            finally { setVerifying(false); }
+          }}>Renew expired challenge</button>
           <div className="onboarding-security-note">
             <span>◈</span>
 
@@ -271,7 +282,7 @@ export function VerifyDomain() {
                 In a production deployment, PhantomLayer
                 checks the DNS record published by your
                 organization. Demo verification is
-                available while DEMO_MODE is enabled.
+                 available only for the reserved local bank domain while DEMO_MODE is enabled.
               </p>
             </div>
           </div>

@@ -13,6 +13,7 @@ import {
 } from "../../lib/api";
 
 type Incident = {
+  customer_context?: {organization: string; domain: string; agent_id: string};
   incident_id: string;
   session_id: string;
   severity: string;
@@ -363,6 +364,11 @@ export function IncidentDetail() {
             </div>
 
             <div className="incident-session-grid">
+              {incident.customer_context && <>
+                <div><span>Organization</span><strong>{incident.customer_context.organization}</strong></div>
+                <div><span>Domain</span><strong>{incident.customer_context.domain}</strong></div>
+                <div><span>Customer agent</span><code>{incident.customer_context.agent_id}</code></div>
+              </>}
               <div>
                 <span>Incident ID</span>
                 <code>{incident.incident_id}</code>

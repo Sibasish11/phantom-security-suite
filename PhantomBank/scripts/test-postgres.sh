@@ -3,6 +3,22 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # Only create new QA databases. No existing databases or volumes are deleted.
 suffix="$(date +%s)_$$"
+created=()
+cleanup() {
+  for target in "${created[@]}"; do
+    docker compose exec -T "bank-postgres-$target" sh -eu -c '
+      for candidate in "${BANK_QA_ADMIN_USER:-$POSTGRES_USER}" phantomlayer postgres; do
+        if [ "$(psql -U "$candidate" -d postgres -Atqc "SELECT rolcreatedb FROM pg_roles WHERE rolname = current_user" 2>/dev/null || true)" = "t" ]; then
+          dropdb --if-exists -U "$candidate" "$1"
+          exit
+        fi
+      done
+      exit 1
+    ' sh "phantombank_qa_${target}_${suffix}"
+  done
+}
+trap cleanup EXIT
+echo "Disposable PhantomBank QA database suffix: $suffix (removed on exit)"
 for target in real honeypot; do
   docker compose exec -T "bank-postgres-$target" sh -eu -s -- "phantombank_qa_${target}_${suffix}" <<'SCRIPT'
 database="$1"
@@ -25,6 +41,7 @@ createdb -U "$admin_user" "$database"
 psql -v ON_ERROR_STOP=1 -U "$admin_user" -d postgres -c "GRANT CONNECT ON DATABASE \"$database\" TO \"$POSTGRES_USER\";"
 psql -v ON_ERROR_STOP=1 -U "$admin_user" -d "$database" -c "GRANT USAGE, CREATE ON SCHEMA public TO \"$POSTGRES_USER\";"
 SCRIPT
+  created+=("$target")
 done
 docker compose run --rm --no-deps -v "$PWD/backend:/app" -e BANK_QA_SUFFIX="$suffix" bank-api python -c '
 import os, pytest

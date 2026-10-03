@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from tests.dns_proof import verify_dns
 
 
 @pytest.fixture
@@ -19,7 +20,7 @@ def tenants():
         assert registration.status_code == 201, registration.text
         client.headers['Authorization'] = f"Bearer {registration.json()['access_token']}"
         domain = client.post('/domains', json={'domain': f'{uid}.example.test'}).json()
-        assert client.post(f"/domains/{domain['id']}/demo-verify").status_code == 200
+        verify_dns(client, domain)
         client.headers['X-Domain-ID'] = domain['id']
         agent = client.post('/agents/register', json={
             'name': 'local-bank-proxy', 'domain_id': domain['id'], 'version': 'qa',

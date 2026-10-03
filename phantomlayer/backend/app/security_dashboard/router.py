@@ -1,4 +1,5 @@
 from collections import Counter
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,7 +10,7 @@ from app.auth.dependencies import CurrentUser, get_current_user
 from app.database import get_sync_control_db_manager
 from app.honeypot.service import honeypot_session_manager
 from app.incident_analysis.service import IncidentService, incident_service
-from app.models.control_plane import AttackSession, Organization
+from app.models.control_plane import AttackSession, Organization, Domain
 from app.security_logging.router import _event_to_response
 from app.security_logging.schemas import EventType
 from app.security_logging.service import event_store
@@ -116,6 +117,15 @@ async def get_incident(
     session = honeypot_session_manager.get_session(report.session_id, current_user.organization_id)
     detail["source"] = session.client_ip if session and session.client_ip else "Unknown source"
     detail["routing_decisions"] = ["honeypot"] if session and session.interaction_count else []
+    with get_sync_control_db_manager().session() as db:
+        record = db.execute(select(AttackSession).where(AttackSession.session_id == report.session_id,
+            AttackSession.organization_id == current_user.organization_id)).scalar_one_or_none()
+        if record:
+            org = db.get(Organization, current_user.organization_id)
+            domain = db.get(Domain, record.domain_id) if record.domain_id else None
+            detail['customer_context'] = {'organization_id': str(org.id), 'organization': org.name,
+                'domain': domain.domain if domain else None,
+                'agent_id': json.loads(record.metadata_json or '{}').get('agent_id')}
     return detail
 
 
@@ -137,6 +147,9 @@ async def get_incident_timeline(
             "timeline": [],
         }
 
+    evidence = event_store.get_by_session(report.session_id, 1000, organization_id=current_user.organization_id)
+    decisions = {event.metadata.get('decision_id'): event for event in evidence
+                 if event.event_type == EventType.REQUEST_ANALYZED}
     timeline = [
         {
             "step": interaction.step,
@@ -148,6 +161,9 @@ async def get_incident_timeline(
             "routing_target": "HONEYPOT",
             "original_target": "real",
             "final_target": "honeypot",
+            "triggered_rules": [rule.get('rule') for rule in decisions[str(interaction.event_id)].triggered_rules]
+                if str(interaction.event_id) in decisions else [],
+            "routing_reason": "Deterministic operation policy; suspicious sessions remain pinned to deception",
             "synthetic_exposure_counts": {
                 key: len(value) if isinstance(value, list) else value
                 for key, value in interaction.entities_exposed.items()

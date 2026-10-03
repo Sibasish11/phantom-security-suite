@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 import dns.resolver
+import httpx
+import secrets
 from sqlalchemy import select
 
 from app.config import settings
@@ -16,6 +18,7 @@ from app.domains.schemas import (
 
 class DomainService:
     VERIFICATION_TTL_HOURS = 24
+    LOCAL_BANK_DOMAIN = "phantombank.example.test"
 
     @staticmethod
     def normalize_domain(domain: str) -> str:
@@ -42,6 +45,7 @@ class DomainService:
             token_expires_at=record.token_expires_at,
             verified=record.verified,
             verified_at=record.verified_at,
+            local_verification_available=settings.demo_mode and record.domain == DomainService.LOCAL_BANK_DOMAIN,
         )
 
     def create(
@@ -234,6 +238,9 @@ class DomainService:
             if record is None:
                 raise KeyError("Domain not found")
 
+            if record.domain != self.LOCAL_BANK_DOMAIN:
+                raise PermissionError("Local verification is limited to phantombank.example.test; use DNS TXT for other domains")
+
             if record.verified:
                 return DomainVerificationResponse(
                     id=record.id,
@@ -245,6 +252,22 @@ class DomainService:
 
             now = datetime.now(timezone.utc)
 
+            if record.token_expires_at and record.token_expires_at < now:
+                raise ValueError("Domain verification token has expired; renew the challenge")
+            # Fixed customer fixture endpoint, never a user-supplied URL, no redirects
+            # or environment proxies. Publishing the challenge requires bank host access.
+            try:
+                with httpx.Client(timeout=4, trust_env=False, follow_redirects=False) as client:
+                    response = client.get("http://bank-api:8001/.well-known/phantomlayer-verification")
+                    response.raise_for_status()
+                    proof = response.json()
+                matches = (proof.get("domain") == record.domain and
+                           secrets.compare_digest(str(proof.get("token", "")), record.verification_token))
+            except (httpx.HTTPError, ValueError, AttributeError):
+                matches = False
+            if not matches:
+                raise ValueError("Publish this challenge inside PhantomBank using scripts/connect.py verify, then retry")
+
             record.verified = True
             record.verified_at = now
 
@@ -255,8 +278,21 @@ class DomainService:
                 domain=record.domain,
                 verified=True,
                 verified_at=record.verified_at,
-                detail="Domain ownership verified in demo mode",
+                detail="Local PhantomBank challenge verified (DEMO_MODE; not public DNS ownership)",
             )
+
+    def renew_challenge(self, domain_id, organization_id):
+        with get_sync_control_db_manager().session() as session:
+            record = session.execute(select(Domain).where(
+                Domain.id == domain_id, Domain.organization_id == organization_id,
+            )).scalar_one_or_none()
+            if record is None:
+                raise KeyError("Domain not found")
+            if not record.verified:
+                record.verification_token = uuid4().hex
+                record.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=self.VERIFICATION_TTL_HOURS)
+                session.commit()
+            return self._to_response(record)
 
     def clear(self) -> None:
         db = get_sync_control_db_manager()

@@ -1,4 +1,5 @@
 from typing import Annotated
+from typing import Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -24,6 +25,8 @@ class Settings(BaseSettings):
     phantomlayer_timeout_seconds: float = 4.0
     defender_evidence_token: str = ""
     demo_mode: bool = True
+    protection_mode: Literal["protected", "standalone"] = "protected"
+    domain_verification_token: str = ""
 
     @model_validator(mode="after")
     def validate_secrets(self):
@@ -31,6 +34,8 @@ class Settings(BaseSettings):
             raise ValueError('Set a random AUTH_SECRET_KEY of at least 32 characters')
         if self.real_database_url == self.honeypot_database_url:
             raise ValueError('Real and deception database URLs must differ')
+        if self.protection_mode == "standalone" and (not self.demo_mode or self.agent_id or self.agent_token):
+            raise ValueError('Standalone mode requires DEMO_MODE and no installed agent credentials')
         return self
 
     @field_validator("allowed_origins", mode="before")

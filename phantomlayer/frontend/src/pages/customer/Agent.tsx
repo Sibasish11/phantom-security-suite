@@ -34,7 +34,7 @@ export function Agent() {
 
   const agent =
     connectedAgent ??
-    agents[0] ??
+    agents.find(a => a.domain_id === verifiedDomain?.id) ??
     null;
 
   if (isLoading) {

@@ -2,17 +2,19 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AgentStatus(str, Enum):
     PENDING = "pending"
+    CONNECTING = "connecting"
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     OFFLINE = "offline"
 
 
 class AgentRegistrationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     name: str = Field(
         min_length=1,
         max_length=100,
@@ -42,6 +44,8 @@ class AgentRegistrationResponse(BaseModel):
 
 
 class AgentHeartbeatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    integration_ready: bool = False
     status: AgentStatus
     real_db_reachable: bool
     honeypot_db_reachable: bool
@@ -63,6 +67,7 @@ class AgentResponse(BaseModel):
     real_db_reachable: bool | None = None
     honeypot_db_reachable: bool | None = None
     telemetry_events_sent: int = 0
+    integration_ready: bool = False
 
 
 class AgentTokenRotationResponse(BaseModel):

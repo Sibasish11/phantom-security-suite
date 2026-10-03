@@ -34,4 +34,4 @@ if command -v docker >/dev/null 2>&1; then
 fi
 
 echo "Wrote local runtime configuration to $ROOT/.env"
-echo "Next: provision the PhantomLayer agent and set AGENT_ID / AGENT_TOKEN, then run docker compose up --build."
+echo "Next: docker compose up --build -d --wait. Open the bank and follow PhantomLayer customer onboarding."

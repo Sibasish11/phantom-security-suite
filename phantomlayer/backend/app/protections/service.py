@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from app.database import get_sync_control_db_manager
+from app.readiness import protection_readiness
 from app.models.control_plane import (
     Domain,
     ProtectionConfiguration,
@@ -22,18 +23,21 @@ class ProtectionService:
     @staticmethod
     def _to_response(
         record: ProtectionConfiguration,
+        session,
     ) -> ProtectionResponse:
         try:
             configuration = json.loads(record.configuration_json or "{}")
         except (TypeError, json.JSONDecodeError):
             configuration = {}
 
+        state, blockers = protection_readiness(session, record)
         return ProtectionResponse(
             id=record.id,
             organization_id=record.organization_id,
             domain_id=record.domain_id,
             layer=record.layer,
-            status=record.status,
+            status=state,
+            readiness_blockers=blockers,
             enabled=record.enabled,
             configuration=configuration,
             created_at=record.created_at,
@@ -88,7 +92,7 @@ class ProtectionService:
             session.add(record)
             session.flush()
 
-            response = self._to_response(record)
+            response = self._to_response(record, session)
 
             session.commit()
 
@@ -112,7 +116,7 @@ class ProtectionService:
             ).scalars().all()
 
             return [
-                self._to_response(record)
+                self._to_response(record, session)
                 for record in records
             ]
 
@@ -136,7 +140,7 @@ class ProtectionService:
             if record is None:
                 return None
 
-            return self._to_response(record)
+            return self._to_response(record, session)
 
     def update(
         self,
@@ -165,9 +169,6 @@ class ProtectionService:
             if request.enabled is not None:
                 record.enabled = request.enabled
 
-            if request.status is not None:
-                record.status = request.status
-
             if request.configuration is not None:
                 record.configuration_json = json.dumps(
                     request.configuration
@@ -175,7 +176,7 @@ class ProtectionService:
 
             session.flush()
 
-            response = self._to_response(record)
+            response = self._to_response(record, session)
 
             session.commit()
 

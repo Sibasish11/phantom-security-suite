@@ -84,6 +84,7 @@ async def agent_heartbeat():
             return True
         except Exception:
             return False
+    reported = 0
     while True:
         try:
             real_ok, honey_ok = await asyncio.gather(
@@ -91,13 +92,16 @@ async def agent_heartbeat():
                 asyncio.to_thread(reachable, honeypot_database),
             )
             async with httpx.AsyncClient(timeout=4) as client:
+                sent = gateway.decision_client.observations_sent
                 response = await client.post(f'{settings.phantomlayer_url}/agents/{settings.agent_id}/heartbeat',
                     headers={'X-Agent-Token': settings.agent_token}, json={
                         'status': 'healthy' if real_ok and honey_ok else 'degraded',
                         'real_db_reachable': real_ok, 'honeypot_db_reachable': honey_ok,
-                        'telemetry_events_sent': 0,
+                        'telemetry_events_sent': max(0, sent - reported),
+                        'integration_ready': settings.protection_mode == 'protected',
                     })
                 response.raise_for_status()
+                reported = sent
         except (httpx.HTTPError, ValueError):
             logging.getLogger(__name__).warning('Agent heartbeat unavailable; protected requests remain fail-closed')
         await asyncio.sleep(30)
@@ -196,6 +200,20 @@ async def gateway_error_handler(_: Request, exc: GatewayError):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "healthy", "service": "PhantomBank"}
+
+
+@app.get("/.well-known/phantomlayer-verification")
+def domain_challenge():
+    if not settings.demo_mode or not settings.domain_verification_token:
+        raise HTTPException(404, "Not found")
+    return {"domain": "phantombank.example.test", "token": settings.domain_verification_token}
+
+
+@app.get("/api/integration-info")
+def integration_info():
+    # Public setup information only; agent credentials and tenant identifiers stay local.
+    return {"domain": "phantombank.example.test", "demo_mode": settings.demo_mode,
+            "mode": settings.protection_mode, "configured": bool(settings.agent_id and settings.agent_token)}
 
 
 _login_attempts = OrderedDict()
@@ -330,17 +348,20 @@ SECURITY_ROUTES = {
 
 
 @app.get("/api/security/{operation}")
-def security_operation(operation: str, request: Request, session: Session = Depends(current_session)):
+def security_operation(operation: str, request: Request, session: Session = Depends(current_session),
+                       x_demo_runner: str | None = Header(default=None)):
     mapped = SECURITY_ROUTES.get(operation)
     if not mapped:
         raise HTTPException(status_code=404, detail="Not found")
-    result = gateway.execute(session=session, operation=mapped, client_ip=_client_ip(request))
+    baseline = False
+    if settings.protection_mode == "standalone":
+        authorize_presenter(request, x_demo_runner)
+        baseline = True
+    result = gateway.execute(session=session, operation=mapped, client_ip=_client_ip(request), baseline_authorized=baseline)
     return {"result": public_security_result(mapped, result)}
 
 
-@app.get("/internal/defender-evidence")
-def defender_evidence(request: Request, limit: int = 50, x_demo_runner: str | None = Header(default=None)):
-    """Local-only defender view; intentionally not part of the customer API."""
+def authorize_presenter(request: Request, x_demo_runner: str | None):
     if (not settings.demo_mode or not settings.defender_evidence_token or not x_demo_runner
             or not secrets.compare_digest(x_demo_runner, settings.defender_evidence_token)):
         raise HTTPException(status_code=404, detail="Not found")
@@ -351,4 +372,10 @@ def defender_evidence(request: Request, limit: int = 50, x_demo_runner: str | No
         local_request = False
     if not local_request:
         raise HTTPException(status_code=403, detail="Local evidence only.")
+
+
+@app.get("/internal/defender-evidence")
+def defender_evidence(request: Request, limit: int = 50, x_demo_runner: str | None = Header(default=None)):
+    """Local-only defender view; intentionally not part of the customer API."""
+    authorize_presenter(request, x_demo_runner)
     return {"evidence": gateway.evidence(limit)}

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import logging
 from collections import deque
+from threading import Lock
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
@@ -101,6 +102,8 @@ class PhantomLayerDecisionClient:
     """The only route from this bank process to PhantomLayer's decision contract."""
 
     def __init__(self) -> None:
+        self._counter_lock = Lock()
+        self.observations_sent = 0
         self.base_url = settings.phantomlayer_url.rstrip("/")
         self.headers = {
             "X-Agent-ID": settings.agent_id,
@@ -112,6 +115,8 @@ class PhantomLayerDecisionClient:
             raise ProtectionUnavailable()
 
     def decide(self, *, session_id: str, operation: str, client_ip: str | None) -> Decision:
+        if settings.demo_mode and settings.protection_mode == "standalone":
+            return Decision(str(uuid4()), session_id, "real", 0, "unprotected", [], session_id)
         self._ensure_configured()
         try:
             UUID(session_id)
@@ -148,6 +153,8 @@ class PhantomLayerDecisionClient:
             raise ProtectionUnavailable() from exc
 
     def observe(self, *, decision: Decision, success: bool, exposed_entities: dict[str, int], response_count: int) -> None:
+        if settings.demo_mode and settings.protection_mode == "standalone":
+            return
         self._ensure_configured()
         try:
             with httpx.Client(timeout=settings.phantomlayer_timeout_seconds) as client:
@@ -166,6 +173,9 @@ class PhantomLayerDecisionClient:
             # The DB operation has already committed. Do not lie to the customer about it;
             # retain local evidence and make the observe failure visible in server logs.
             logger.error("PhantomLayer observe failed for %s: %s", decision.decision_id, exc)
+        else:
+            with self._counter_lock:
+                self.observations_sent += 1
 
 
 class GatewayService:
@@ -272,7 +282,7 @@ class GatewayService:
             self._observe(decision=decision, success=False, operation="login", response_count=0)
             raise GatewayDatabaseError() from exc
 
-    def execute(self, *, session: Session, operation: str, payload: dict[str, Any] | None = None, client_ip: str | None = None) -> GatewayResult:
+    def execute(self, *, session: Session, operation: str, payload: dict[str, Any] | None = None, client_ip: str | None = None, baseline_authorized: bool = False) -> GatewayResult:
         if operation not in OPERATIONS:
             raise GatewayError("unsupported banking operation")
         payload = payload or {}
@@ -281,7 +291,8 @@ class GatewayService:
             operation=operation,
             client_ip=client_ip,
         )
-        if operation in SENSITIVE_OPERATIONS and decision.target != "honeypot":
+        baseline = baseline_authorized and settings.demo_mode and settings.protection_mode == "standalone"
+        if operation in SENSITIVE_OPERATIONS and decision.target != "honeypot" and not baseline:
             self._observe(decision=decision, success=False, operation=operation, response_count=0)
             raise SensitiveOperationDenied()
         # A deception session can never be promoted into a real-data session by a

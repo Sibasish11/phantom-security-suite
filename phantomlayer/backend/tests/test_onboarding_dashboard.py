@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.domains.service import DomainService
 from app.main import app
+from tests.dns_proof import verify_dns
 
 
 client = TestClient(app)
@@ -54,25 +55,7 @@ def _create_domain(
 
 def _create_verified_domain() -> dict:
     domain = _create_domain()
-
-    headers = _auth_headers()
-
-    response = client.post(
-        f"/domains/{domain['id']}/demo-verify",
-        headers=headers,
-    )
-
-    if settings.demo_mode:
-        assert response.status_code == 200
-
-        payload = response.json()
-
-        assert payload["verified"] is True
-        assert payload["domain"] == domain["domain"]
-
-    else:
-        assert response.status_code == 403
-
+    verify_dns(client, domain, _auth_headers())
     return domain
 
 
@@ -120,19 +103,7 @@ def test_demo_domain_verification():
         headers=headers,
     )
 
-    if settings.demo_mode:
-        assert response.status_code == 200
-
-        payload = response.json()
-
-        assert payload["verified"] is True
-        assert payload["domain"] == domain["domain"]
-        assert payload["detail"] == (
-            "Domain ownership verified in demo mode"
-        )
-
-    else:
-        assert response.status_code == 403
+    assert response.status_code == 403  # Arbitrary domains always require DNS.
 
 
 def test_already_verified_domain():
@@ -141,7 +112,7 @@ def test_already_verified_domain():
     headers = _auth_headers()
 
     response = client.post(
-        f"/domains/{domain['id']}/demo-verify",
+        f"/domains/{domain['id']}/verify",
         headers=headers,
     )
 

@@ -131,3 +131,13 @@ async def demo_verify_domain(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
         ) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/{domain_id}/renew-challenge", response_model=DomainResponse)
+def renew_challenge(domain_id: UUID, current_user: CurrentUser = Depends(require_role("admin"))):
+    try:
+        return domain_service.renew_challenge(domain_id, current_user.organization_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc

@@ -11,6 +11,7 @@ export function Activation() {
     activeProtection,
     protections,
     connectedAgent,
+    agents,
     refresh,
     isLoading,
     error,
@@ -20,10 +21,10 @@ export function Activation() {
   const [seconds, setSeconds] = useState(0);
 
   const agentConnected =
-    connectedAgent?.status === "healthy" ||
-    connectedAgent?.status === "degraded";
+    connectedAgent?.status === "healthy";
 
   const protectionActive =
+    !error &&
     activeProtection?.enabled === true &&
     activeProtection.status === "active";
 
@@ -40,12 +41,8 @@ export function Activation() {
       : null;
 
   useEffect(() => {
-    if (agentConnected && protectionActive) {
-      return;
-    }
-
     const interval = window.setInterval(() => {
-      setSeconds((value) => value + 1);
+      if (!agentConnected || !protectionActive) setSeconds((value) => value + 5);
       void refresh();
     }, 5000);
 
@@ -73,10 +70,13 @@ export function Activation() {
   }
 
   const ready =
+    !error &&
     Boolean(verifiedDomain) &&
     Boolean(activeProtection) &&
     Boolean(connectedAgent) &&
     agentConnected &&
+    connectedAgent?.real_db_reachable === true &&
+    connectedAgent?.honeypot_db_reachable === true &&
     protectionActive;
 
   return (
@@ -146,6 +146,11 @@ export function Activation() {
       </section>
 
       <div className="activation-grid">
+        {!ready && <section className="onboarding-card"><h2>What’s missing</h2>
+          <ul>{(configuredProtection?.readiness_blockers ?? ['Configure protection for this domain']).map(reason => <li key={reason}>{reason}</li>)}</ul>
+          <p>Agent: {agents.find(a => a.domain_id === verifiedDomain?.id)?.status ?? 'not registered'}</p>
+          <a href="/onboarding/agent">Installation and credential recovery →</a>
+        </section>}
         <section className="activation-checks">
           <div className="activation-section-heading">
             <span className="onboarding-eyebrow">

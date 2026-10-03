@@ -12,12 +12,13 @@ from app.agent.schemas import (
     AgentResponse,
 )
 from app.database import get_sync_control_db_manager
+from app.readiness import agent_status, integration_ready
 from app.models.control_plane import (
     Agent,
     AgentStatus as ControlAgentStatus,
     Domain,
-    ProtectionConfiguration,
-    ProtectionStatus,
+    Organization,
+    OrganizationStatus,
 )
 
 
@@ -50,7 +51,8 @@ class AgentRegistry:
             domain_id=agent.domain_id,
             version=agent.version,
             capabilities=capabilities,
-            status=agent.status.value,
+            status=agent_status(agent),
+            integration_ready=integration_ready(agent),
             registered_at=agent.registered_at,
             last_heartbeat_at=agent.last_heartbeat_at,
             real_db_reachable=agent.real_db_reachable,
@@ -150,6 +152,11 @@ class AgentRegistry:
                 return None
 
             agent.token_hash = token_hash
+            agent.status = ControlAgentStatus.PENDING
+            agent.last_heartbeat_at = None
+            agent.real_db_reachable = False
+            agent.honeypot_db_reachable = False
+            agent.metadata_json = "{}"
 
             session.flush()
 
@@ -223,36 +230,6 @@ class AgentRegistry:
 
         return ControlAgentStatus.DEGRADED
 
-    @staticmethod
-    def _sync_protection_status(
-        session,
-        domain_id: UUID,
-        agent_status: ControlAgentStatus,
-    ) -> None:
-
-        protections = session.execute(
-            select(ProtectionConfiguration).where(
-                ProtectionConfiguration.domain_id == domain_id
-            )
-        ).scalars().all()
-
-        if agent_status == ControlAgentStatus.HEALTHY:
-            for protection in protections:
-                if protection.enabled:
-                    protection.status = (
-                        ProtectionStatus.ACTIVE
-                    )
-
-        elif agent_status in {
-            ControlAgentStatus.DEGRADED,
-            ControlAgentStatus.OFFLINE,
-        }:
-            for protection in protections:
-                if protection.status == ProtectionStatus.ACTIVE:
-                    protection.status = (
-                        ProtectionStatus.PAUSED
-                    )
-
     def heartbeat(
         self,
         agent_id: UUID,
@@ -280,8 +257,14 @@ class AgentRegistry:
             ):
                 return None
 
+            domain = session.get(Domain, agent.domain_id) if agent.domain_id else None
+            organization = session.get(Organization, agent.organization_id)
+            if (not domain or not domain.verified or domain.organization_id != agent.organization_id
+                    or not organization or organization.status != OrganizationStatus.ACTIVE):
+                return None
+
             requested_status = ControlAgentStatus(
-                heartbeat.status.value
+                "pending" if heartbeat.status.value == "connecting" else heartbeat.status.value
             )
 
             actual_status = self._calculate_status(
@@ -293,6 +276,7 @@ class AgentRegistry:
             )
 
             agent.status = actual_status
+            agent.metadata_json = json.dumps({"integration_ready": heartbeat.integration_ready})
             agent.last_heartbeat_at = datetime.now(
                 timezone.utc
             )
@@ -305,13 +289,6 @@ class AgentRegistry:
             agent.telemetry_events_sent += (
                 heartbeat.telemetry_events_sent
             )
-
-            if agent.domain_id is not None:
-                self._sync_protection_status(
-                    session,
-                    agent.domain_id,
-                    actual_status,
-                )
 
             session.flush()
 

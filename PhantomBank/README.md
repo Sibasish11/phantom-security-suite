@@ -22,17 +22,18 @@ First start/initialize PhantomLayer as described in its README, with local `DEMO
 ```sh
 cd /home/anubhav/Projects/PhantomBank
 ./scripts/setup.sh
-python scripts/provision_demo.py
 docker compose up --build -d --wait
 ```
 
-The setup script preserves an existing `.env`, replacing only placeholders with random runtime values. Provisioning uses the local authenticated public API to create/reuse a dedicated organization, demo-verified domain, enabled API protection and registered agent. It writes defender credentials to ignored, owner-only `.env.demo-login` and the agent credential to ignored `.env`, without printing secrets. Compose refuses to start without agent credentials. Re-run `docker compose up -d` after changing them.
+The setup script preserves an existing `.env`, replacing only placeholders with random runtime values. A fresh bank starts in local synthetic **standalone** mode with no pre-provisioned agent. Open <http://localhost:3001/owner>, then follow [customer onboarding](../phantomlayer/docs/CUSTOMER-ONBOARDING.md): signup, add `phantombank.example.test`, publish the challenge with `python scripts/connect.py verify`, verify it in the UI, select API Protection, register and download your customer configuration, then install it with `python scripts/connect.py install /path/to/phantomlayer-integration.json`.
 
-For manual provisioning, configure `AGENT_ID` and `AGENT_TOKEN` from your own verified domain's registered agent instead. An enabled API/full protection is required. The bank API joins the `phantomlayer_edge` network to reach `http://backend:8000`; the bank databases do **not** join that network.
+The installer validates organization/domain/agent binding through the authenticated API, writes owner-only `.env`, switches to protected mode and recreates bank-api. Its embedded adapter sends real connectivity heartbeats; registration alone does not activate protection. The bank API joins `phantomlayer_edge` to reach `http://backend:8000`; bank databases do **not** join that network. Database credentials never enter the downloaded configuration or SaaS.
+
+`python scripts/provision_demo.py` remains an **optional automated judge** convenience after both stacks are running. It uses the same authenticated onboarding/challenge/install contracts and stores that separate tenant's login in ignored `.env.demo-login`. It is not needed by the manual UI journey and must not be run to connect an unrelated browser owner.
 
 - Bank UI: <http://localhost:3001>
 - Bank API: <http://127.0.0.1:8001>
-- SOC: <http://localhost:3000>, using `.env.demo-login`
+- SOC: <http://localhost:3000>, using **the owner account you created** (or `.env.demo-login` only for automated provisioning)
 
 **Normal synthetic login:** `maya.bennett@northstar.test` / `DemoMaya!2025`.
 
@@ -54,7 +55,7 @@ Before executing an operation, `POST /integrations/bank/decision`:
 
 The response supplies `decision_id`, an internal namespaced `session_id`, `target`, `risk_score`, `attack_stage` and `triggered_rules`. The bank **keeps sending its original UUID**, not the returned namespaced handle, on subsequent decisions. Tenant identity is never taken from the customer request.
 
-A missing, malformed, unauthorized, disabled or unavailable decision returns 503 with **no business banking SQL for that request**. Database initialization and periodic health probes are separate operational paths. Recon/admin operations also have a bank-side guard: even an erroneous `real` decision cannot authorize them against the real database.
+In protected mode, a missing, malformed, unauthorized, disabled or unavailable decision returns 503 with **no business banking SQL for that request**. Database initialization and periodic health probes are separate operational paths. Recon/admin operations also have a bank-side guard: even an erroneous `real` decision cannot authorize them against the real database. Standalone mode is an explicit DEMO_MODE-only deployment with no agent credentials. Its bounded read-only baseline additionally requires a local presenter token and bank authentication; pausing SaaS protection never enables it.
 
 After execution, `POST /integrations/bank/observe`:
 
@@ -71,7 +72,13 @@ Observations are decision-owned and idempotent. Only synthetic exposure counts a
 
 The operation allowlist is `login`, `get_accounts`, `get_balance`, `get_transactions`, `get_beneficiaries`, `get_cards`, `create_transfer`, `get_profile`, `list_tables`, `enumerate_api`, `get_customers`, `enumerate_accounts`, `enumerate_transactions`, `probe_admin`, and `credential_probe`. There is no arbitrary-SQL endpoint. Customer responses do not reveal target, risk, rules or agent credentials.
 
-A 30-second outbound heartbeat reports local database connectivity booleans. It does not transmit database rows or credentials.
+A 30-second outbound heartbeat reports database connectivity, installed adapter readiness and successful observation counts. Readiness expires after 90 seconds without a heartbeat. It does not transmit database rows or credentials.
+
+## Before/after customer demonstration
+
+From a standalone bank run `python scripts/compare_attack.py before`, complete the manual onboarding above, then run `python scripts/compare_attack.py after`. These send exactly the same eight allowlisted HTTP operations and print destination, response, rules, risk, and dataset/audit fingerprints. Before: Maya on REAL. After: John on HONEYPOT, risk 27→49→67→77→87→97→100→100, real business and access-audit fingerprints unchanged during the attack.
+
+For an existing connected local environment, `python scripts/connect.py standalone` saves its connection in owner-only `.env.integration-backup` and explicitly starts the unconnected baseline. `python scripts/connect.py restore` recovers that saved connection. Datasets and documented logins are preserved. Full presentation steps and bounded-proof limitations: [JUDGE-DEMO.md](../phantomlayer/docs/JUDGE-DEMO.md).
 
 ## Reproducible evidence
 
@@ -99,7 +106,7 @@ The scripts use loopback APIs and synthetic datasets only. The evidence proves t
 ./scripts/test-postgres.sh
 ```
 
-Creates fresh `phantombank_qa_*` databases and runs all backend tests, including actual PostgreSQL audit insertion, transfer replay and six concurrent retries producing one debit. Existing databases/volumes are never dropped. QA databases are retained for operator-approved cleanup.
+Creates fresh `phantombank_qa_*` databases and runs all backend tests, including actual PostgreSQL audit insertion, transfer replay and six concurrent retries producing one debit. Its exact newly created QA databases are removed on exit. Existing databases/volumes are preserved.
 
 ### Fast local tests
 
@@ -121,7 +128,7 @@ npm ci
 npm run build
 ```
 
-Cross-application browser smoke lives in `../phantomlayer/frontend/tests/browser-smoke.cjs`. Follow [the Judge Demo Runbook](../phantomlayer/docs/JUDGE-DEMO.md) to provide the generated defender login and a Chromium executable. The same `npm test` command also runs responsive SOC/onboarding checks and `judge-demo.cjs`, a single-session real/deception browser rehearsal with live PostgreSQL isolation fingerprints and strict console-error checks. Run Docker-backed QA first, not concurrently with the browser. Browser QA submits a £0.01 synthetic transfer and verifies the displayed balance update; its demo ledger entry is retained. Build success alone is not browser verification.
+The final lifecycle test is `npm run test:customer` (also `npm test`) in `../phantomlayer/frontend`. It uses browser signup/verification/agent download, installs that customer's credential, proves before/after routing, investigates/analyzes in SOC, checks isolation and restarts, then removes only manifest-owned QA resources and restores the original bank connection and audit fingerprints. Run Docker-backed QA first, not concurrently with browser checks. Older `test:smoke`, `test:ui` and `test:judge` scripts retain transfers/demo activity and predate this cleanup-aware customer journey.
 
 ## Boundaries and remaining work
 

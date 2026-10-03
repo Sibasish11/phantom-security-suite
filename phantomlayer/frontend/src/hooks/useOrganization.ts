@@ -130,6 +130,8 @@ export function useOrganization(): UseOrganizationResult {
    */
   useEffect(() => {
     void refresh();
+    const timer = window.setInterval(() => void refresh(), 15000);
+    return () => window.clearInterval(timer);
   }, [refresh]);
 
   /*
@@ -218,6 +220,7 @@ export function useOrganization(): UseOrganizationResult {
   const activeProtection =
     protections.find(
       (protection) =>
+        protection.domain_id === verifiedDomain?.id &&
         protection.enabled &&
         protection.status === "active",
     ) ?? null;
@@ -232,8 +235,8 @@ export function useOrganization(): UseOrganizationResult {
   const connectedAgent =
     agents.find(
       (agent) =>
-        agent.status === "healthy" ||
-        agent.status === "degraded",
+        agent.domain_id === verifiedDomain?.id &&
+        (agent.status === "healthy" || agent.status === "degraded"),
     ) ?? null;
 
   return {

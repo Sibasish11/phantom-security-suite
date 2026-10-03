@@ -12,6 +12,7 @@ class DomainCreateRequest(BaseModel):
 
 
 class DomainResponse(BaseModel):
+    local_verification_available: bool = False
     id: UUID
     domain: str
     verification_record_name: str

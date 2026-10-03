@@ -14,6 +14,7 @@ os.environ.update(
         "AUTH_SECRET_KEY": "unit-test-secret-not-for-deployment",
         "AGENT_ID": "agent-unit-test",
         "AGENT_TOKEN": "token-unit-test",
+        "PROTECTION_MODE": "protected",
         "ALLOWED_ORIGINS": "http://testserver,http://localhost:3001",
         "PHANTOMLAYER_URL": "http://phantomlayer.test",
     }

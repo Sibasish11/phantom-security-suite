@@ -161,6 +161,7 @@ class HoneypotSessionManager:
 
             interactions.append(
                 HoneypotInteractionRecord(
+                    event_id=str(interaction.event_id) if interaction.event_id else None,
                     step=interaction.step,
                     timestamp=interaction.timestamp,
                     operation=interaction.operation,

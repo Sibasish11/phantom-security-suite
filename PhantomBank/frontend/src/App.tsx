@@ -47,7 +47,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     <section className="auth-art">
       <div className="art-top"><Mark inverse /><span className="brand inverse-text">phantombank</span><span className="demo-pill">Fictional demo</span></div>
       <div className="art-copy"><p className="eyebrow inverse-text">Quiet confidence, by design</p><h1>Make room for the things that matter.</h1><p className="art-subtitle">A considered banking experience for your everyday, your ambitions, and the in-between.</p></div>
-      <div className="art-footer"><span>Private banking demo</span><span>Protected by PhantomLayer</span></div>
+      <div className="art-footer"><span>Private banking demo</span><a href="/owner">Bank owner · Connect PhantomLayer →</a></div>
     </section>
     <section className="auth-panel">
       <div className="auth-form-wrap"><div className="mobile-brand"><Mark /><span className="brand">phantombank</span></div><p className="eyebrow">Welcome back</p><h2>Sign in to your bank</h2><p className="muted">See your money clearly. Move it thoughtfully.</p>
@@ -76,9 +76,38 @@ function App() {
     }
     api<{ user: User }>('/api/auth/session').then((result) => setUser(result.user)).catch(() => undefined).finally(() => setBooting(false))
   }, [])
+  if (window.location.pathname === '/owner') return <OwnerSetup />
   if (booting) return <div className="boot-screen"><Mark /><span>Loading your space…</span></div>
   if (!user) return <Login onLogin={setUser} />
   return <BankApp user={user} onLogout={() => setUser(null)} />
+}
+
+function OwnerSetup() {
+  const [info, setInfo] = useState<{domain: string; mode: string; configured: boolean} | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => { api<{domain: string; mode: string; configured: boolean}>('/api/integration-info').then(setInfo).catch(() => setError('Bank API unavailable. Start the local stack and reload.')) }, [])
+  return <main className="content" style={{maxWidth: 1000, margin: 'auto'}}>
+    <p className="eyebrow">Fictional customer · Local synthetic demonstration</p>
+    <h1>Connect your bank to PhantomLayer</h1><p><a href="/">← Open banking application</a></p>
+    {error && <p role="alert">{error}</p>}
+    <section className="page-card"><h2>Your customer infrastructure</h2>
+      <p>Domain: <strong>{info?.domain ?? 'Loading…'}</strong></p>
+      <p>Deployment: <strong>{info?.mode === 'standalone' ? 'BEFORE — standalone synthetic bank, no protection' : info?.configured ? 'Adapter configured — confirm live readiness in PhantomLayer' : 'Waiting for customer integration'}</strong></p>
+      <p>Maya Bennett is the legitimate synthetic customer. John Carter belongs to the separate deception database. No real funds or customers are connected.</p>
+    </section>
+    <section className="page-card"><h2>1. Account → organization → ownership</h2>
+      <p><a href="http://localhost:3000/signup" target="_blank" rel="noreferrer">Create your PhantomLayer owner account ↗</a>. Signup creates your organization. Add <strong>phantombank.example.test</strong>.</p>
+      <p>On your bank host, run <code>python scripts/connect.py verify</code> and paste the TXT challenge from PhantomLayer. Then click local demo verification. Production ownership uses DNS TXT.</p>
+      <h2>2. Protection → customer agent</h2><p>Choose API Protection. Register the agent and download your one-time integration configuration.</p>
+      <p>From this bank directory run <code>python scripts/connect.py install "$HOME/Downloads/phantomlayer-integration.json"</code>.</p>
+      <p>The installer checks your agent’s organization and domain, stores its credential locally and restarts bank-api. Your database credentials and records stay here.</p>
+      <h2>3. Healthy → active → investigate</h2><p>Open PhantomLayer’s activation page. Wait for domain verified, healthy heartbeat, real DB connected, honeypot connected and active protection. Open the SOC dashboard for incidents, timelines and labeled mock analysis.</p>
+    </section>
+    <section className="page-card"><h2>Presenter: same bounded attack, before and after</h2>
+      <p>Before installing the adapter, run <code>python scripts/compare_attack.py before</code>. After activation run <code>python scripts/compare_attack.py after</code>. The commands use the same read-only allowlisted HTTP operations with a synthetic login and local presenter credential.</p>
+      <p>Compare Maya on the unprotected real path with John in deception, risk/rules and unchanged dataset fingerprints. Pausing a configured SaaS protection fails closed; it never enables the unprotected baseline.</p>
+    </section>
+  </main>
 }
 
 function BankApp({ user, onLogout }: { user: User; onLogout: () => void }) {

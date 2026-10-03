@@ -33,6 +33,16 @@ SENSITIVE = {"get_customers", "enumerate_customers", "enumerate_accounts", "enum
 RECON = {"list_tables", "enumerate_api"}
 
 
+@router.get("/identity")
+def integration_identity(request: Request, x_agent_id: str | None = Header(default=None),
+                         x_agent_token: str | None = Header(default=None)):
+    context = _authenticate_agent(x_agent_id, x_agent_token, request)
+    with get_sync_control_db_manager().session() as db:
+        domain = db.get(Domain, context.domain_id)
+        return {"agent_id": str(context.agent_id), "organization_id": str(context.organization_id),
+                "domain_id": str(context.domain_id), "domain": domain.domain}
+
+
 def _authenticate_agent(agent_id_header, agent_token, request: Request) -> TrustedContext:
     invalid = HTTPException(401, "Invalid integration credentials", headers={"WWW-Authenticate": "Agent"})
     if not agent_id_header or not agent_token:

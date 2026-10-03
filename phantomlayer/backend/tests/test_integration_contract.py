@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.dns_proof import verify_dns
 
 
 client = TestClient(app)
@@ -28,7 +29,7 @@ def test_bank_decision_observe_routes_and_correlates_without_tenant_input():
     )
     assert domain.status_code == 201
     domain_id = domain.json()["id"]
-    assert client.post(f"/domains/{domain_id}/demo-verify", headers=headers).status_code == 200
+    verify_dns(client, domain.json(), headers)
     assert client.post('/protections', headers=headers, json={'domain_id': domain_id, 'layer': 'api'}).status_code == 201
 
     registration = client.post(

@@ -6,6 +6,7 @@ from fastapi import (
     Header,
     HTTPException,
     status,
+    Response,
 )
 
 from app.agent.schemas import (
@@ -42,10 +43,12 @@ router = APIRouter(
 )
 async def register_agent(
     request: AgentRegistrationRequest,
+    response: Response,
     current_user: CurrentUser = Depends(
         require_role("admin")
     ),
 ):
+    response.headers["Cache-Control"] = "no-store"
     try:
         agent, token = agent_registry.register(
             request,
@@ -109,10 +112,12 @@ async def get_agent(
 )
 async def rotate_agent_token(
     agent_id: UUID,
+    response: Response,
     current_user: CurrentUser = Depends(
         require_role("admin")
     ),
 ):
+    response.headers["Cache-Control"] = "no-store"
     result = agent_registry.rotate_token(
         agent_id,
         current_user.organization_id,

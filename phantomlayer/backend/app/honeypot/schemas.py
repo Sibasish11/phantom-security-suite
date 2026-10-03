@@ -68,6 +68,7 @@ class ExposedEntityTracker(BaseModel):
 
 
 class HoneypotInteractionRecord(BaseModel):
+    event_id: str | None = None
     step: int
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     operation: str

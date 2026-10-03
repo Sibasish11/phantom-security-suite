@@ -81,7 +81,7 @@ export function Protection() {
     isLoading,
   } = useOrganization();
 
-  const activeProtection = active ?? protections.find(p => p.domain_id === verifiedDomain?.id) ?? protections[0] ?? null;
+  const activeProtection = active ?? protections.find(p => p.domain_id === verifiedDomain?.id) ?? null;
 
   const [saving, setSaving] =
     useState(false);
@@ -242,7 +242,7 @@ export function Protection() {
 
         <StatusPill
           status={
-            activeProtection.status
+             loadError ? 'unavailable' : activeProtection.status
           }
         />
       </section>
@@ -360,8 +360,8 @@ export function Protection() {
             </strong>
 
             <span>
-              {enabled
-                ? "PhantomLayer is actively protecting this deployment."
+               {enabled
+                 ? loadError ? 'Unable to refresh integration readiness.' : activeProtection.status === 'active' ? "PhantomLayer is actively protecting this deployment." : (activeProtection.readiness_blockers ?? ['Waiting for integration readiness']).join('. ')
                 : "Protection is currently paused for this deployment."}
             </span>
           </div>

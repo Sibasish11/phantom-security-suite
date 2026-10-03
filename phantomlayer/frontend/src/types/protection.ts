@@ -6,6 +6,8 @@ export type ProtectionLayer =
 
 export type ProtectionStatus =
   | "configuring"
+  | "connecting"
+  | "degraded"
   | "active"
   | "paused";
 
@@ -33,7 +35,6 @@ export interface CreateProtectionRequest {
 export interface UpdateProtectionRequest {
   layer?: ProtectionLayer;
   enabled?: boolean;
-  status?: ProtectionStatus;
   configuration?: Record<string, unknown>;
 }
 

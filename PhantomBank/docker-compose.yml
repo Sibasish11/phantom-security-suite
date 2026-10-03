@@ -41,8 +41,10 @@ services:
       DEMO_MODE: ${DEMO_MODE:-true}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001}
       PHANTOMLAYER_URL: ${PHANTOMLAYER_URL:-http://backend:8000}
-      AGENT_ID: ${AGENT_ID:?register PhantomLayer agent and set AGENT_ID}
-      AGENT_TOKEN: ${AGENT_TOKEN:?register PhantomLayer agent and set AGENT_TOKEN}
+      AGENT_ID: ${AGENT_ID:-}
+      AGENT_TOKEN: ${AGENT_TOKEN:-}
+      PROTECTION_MODE: ${PROTECTION_MODE:-protected}
+      DOMAIN_VERIFICATION_TOKEN: ${DOMAIN_VERIFICATION_TOKEN:-}
       DEFENDER_EVIDENCE_TOKEN: ${DEFENDER_EVIDENCE_TOKEN:?run ./scripts/setup.sh first}
     ports:
       - "127.0.0.1:8001:8001"

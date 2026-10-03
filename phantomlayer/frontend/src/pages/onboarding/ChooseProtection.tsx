@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { useNavigate } from "react-router-dom";
-import { createProtection } from "../../lib/api";
+import { createProtection, updateProtection } from "../../lib/api";
 import { useOrganization } from "../../hooks/useOrganization";
 import type { ProtectionLayer } from "../../types/protection";
 
@@ -108,7 +108,9 @@ export function ChooseProtection() {
     setSaving(true);
 
     try {
-      await createProtection({
+      const existing = protections.find(p => p.domain_id === domainId);
+      if (existing) await updateProtection(existing.id, {layer: selectedLayer, enabled: true});
+      else await createProtection({
         domain_id: domainId,
         layer: selectedLayer,
         configuration: {
